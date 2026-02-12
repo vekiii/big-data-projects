@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # HDFS NameNode
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    restart: always
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    volumes:
+      - ./dataset_ready_for_hdfs:/data/incoming
+    environment:
+      - CLUSTER_NAME=test
+      - ENSURE_NAMENODE_DIR=/hadoop/dfs/name
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+
+    networks:
+      - bigdata-network
+
+  # HDFS DataNode
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    restart: always
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+    networks:
+      - bigdata-network
+
+  # Spark Master
+  spark-master:
+    image: bde2020/spark-master:3.1.1-hadoop3.2
+    container_name: spark-master
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    networks:
+      - bigdata-network
+
+  # Spark Worker
+  spark-worker:
+    image: bde2020/spark-worker:3.1.1-hadoop3.2
+    container_name: spark-worker
+    depends_on:
+      - spark-master
+    environment:
+      - "SPARK_MASTER=spark://spark-master:7077"
+    ports:
+      - "8081:8081"
+    networks:
+      - bigdata-network
+
+networks:
+  bigdata-network:
+    driver: bridge
