@@ -11,6 +11,7 @@ services:
       - "9000:9000"
     volumes:
       - ./dataset_ready_for_hdfs:/data/incoming
+      - hadoop_namenode:/hadoop/dfs/name
     environment:
       - CLUSTER_NAME=test
       - ENSURE_NAMENODE_DIR=/hadoop/dfs/name
@@ -24,6 +25,8 @@ services:
     image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
     container_name: datanode
     restart: always
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
     environment:
       - SERVICE_PRECONDITION=namenode:9870
       - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
@@ -34,9 +37,15 @@ services:
   spark-master:
     image: bde2020/spark-master:3.1.1-hadoop3.2
     container_name: spark-master
+    environment:
+    - SPARK_MASTER_LOG=/spark/logs
+    - SPARK_MASTER_PORT=7077
+    - SPARK_DRIVER_MEMORY=2G
     ports:
       - "8080:8080"
       - "7077:7077"
+    volumes:
+      - .:/app
     networks:
       - bigdata-network
 
@@ -48,11 +57,19 @@ services:
       - spark-master
     environment:
       - "SPARK_MASTER=spark://spark-master:7077"
+      - SPARK_WORKER_CORES=4
+      - SPARK_WORKER_MEMORY=8G
     ports:
       - "8081:8081"
+    volumes:
+      - .:/app
     networks:
       - bigdata-network
 
 networks:
   bigdata-network:
     driver: bridge
+
+volumes:
+  hadoop_datanode:
+  hadoop_namenode:

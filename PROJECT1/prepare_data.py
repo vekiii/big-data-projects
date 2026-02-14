@@ -14,7 +14,7 @@ def prepare_and_augment_data(source_path, destination_path, target_size_gb=1.1):
 
     print(f"Scanning: {source_path}")
     for root, dirs, files in os.walk(source_path):
-        # We target only the 'fulldata' folders as discussed
+        # We target only the 'fulldata' folders
         if "fulldata" in root:
             for file in files:
                 if file.endswith(".csv"):
@@ -35,7 +35,7 @@ def prepare_and_augment_data(source_path, destination_path, target_size_gb=1.1):
     current_size = get_dir_size_gb(destination_path)
     print(f"Initial size: {current_size:.4f} GB")
 
-    # Requirement #17: Generate additional data to reach ~1GB
+    # Generate additional data to reach ~1GB
     copy_round = 1
     while current_size < target_size_gb:
         print(f"Current size {current_size:.2f} GB is below target. Augmenting (Round {copy_round})...")
@@ -56,7 +56,7 @@ def prepare_and_augment_data(source_path, destination_path, target_size_gb=1.1):
 
 
 if __name__ == "__main__":
-    # Paths based on your folder structure image
+    # Paths based on the folder structure
     base_dir = "D:/New folder/faks/MASTER/BIGDATA/PROJECT1"
     source = os.path.join(base_dir, "DATA/uqvitalsignsdata")
     destination = os.path.join(base_dir, "dataset_ready_for_hdfs")
