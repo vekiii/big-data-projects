@@ -1,7 +1,6 @@
 *.csv
 .venv/
 .idea/
-*.pdf
-PROJECT2/sumo-scenario/emission_data.xml
 
+PROJECT2/sumo-scenario/emission_data.xml
 PROJECT2/sumo-scenario/fcd_data.xml
