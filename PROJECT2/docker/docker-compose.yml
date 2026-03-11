@@ -1,0 +1,126 @@
+version: "3.8"
+
+services:
+  kafka-1:
+    image: apache/kafka:3.9.2
+    container_name: kafka-1
+    hostname: kafka-1
+    ports:
+      - "9092:29092"
+    environment:
+      CLUSTER_ID: kraft-cluster-educational
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-1:9093,2@kafka-2:9093
+      KAFKA_LISTENERS: CLIENT://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: CLIENT://kafka-1:9092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: CLIENT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 2
+    volumes:
+      - kafka1-data:/var/lib/kafka/data
+
+  kafka-2:
+    image: apache/kafka:3.9.2
+    container_name: kafka-2
+    hostname: kafka-2
+    ports:
+      - "9094:29092"
+    environment:
+      CLUSTER_ID: kraft-cluster-educational
+      KAFKA_NODE_ID: 2
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-1:9093,2@kafka-2:9093
+      KAFKA_LISTENERS: CLIENT://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: CLIENT://kafka-2:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: CLIENT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 2
+    volumes:
+      - kafka2-data:/var/lib/kafka/data
+
+  spark-master:
+    image: bde2020/spark-master:3.1.1-hadoop3.2
+    container_name: spark-master
+    environment:
+      - SPARK_MASTER_PORT=7077
+      - SPARK_DRIVER_MEMORY=2G
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - ../spark-apps:/app
+    networks:
+      - default
+
+  spark-worker-1:
+    image: bde2020/spark-worker:3.1.1-hadoop3.2
+    container_name: spark-worker-1
+    depends_on:
+      - spark-master
+    environment:
+      - "SPARK_MASTER=spark://spark-master:7077"
+      - SPARK_WORKER_CORES=2
+    ports:
+      - "8082:8081"
+    volumes:
+      - ../spark-apps:/app
+    networks:
+      - default
+
+  spark-worker-2:
+    image: bde2020/spark-worker:3.1.1-hadoop3.2
+    container_name: spark-worker-2
+    depends_on:
+      - spark-master
+    environment:
+      - "SPARK_MASTER=spark://spark-master:7077"
+      - SPARK_WORKER_CORES=2
+    ports:
+      - "8083:8081"
+    volumes:
+      - ../spark-apps:/app
+    networks:
+      - default
+
+  flink-jobmanager:
+    image: flink:latest
+    container_name: flink-jobmanager
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+    volumes:
+      - ../flink-apps:/opt/flink-apps
+    networks:
+      - default
+
+  flink-taskmanager:
+    image: flink:latest
+    container_name: flink-taskmanager
+    depends_on:
+      - flink-jobmanager
+    command: taskmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 2
+    volumes:
+      - ../flink-apps:/opt/flink-apps
+    networks:
+      - default
+
+volumes:
+  kafka1-data:
+  kafka2-data:
+
+networks:
+  default:
+    name: bde
+    external: true
