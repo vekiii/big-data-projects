@@ -1,0 +1,85 @@
+version: "3.8"
+
+
+services:
+
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    restart: unless-stopped
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name          # Metadata persistence (FileSystem Image)
+      - ./dataset_ready_for_hdfs:/data/incoming   # Local prepared CSVs → inside container
+    environment:
+      - CLUSTER_NAME=vitalsigns
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - HDFS_CONF_dfs_webhdfs_enabled=true
+      - HDFS_CONF_dfs_permissions_enabled=false
+      - HDFS_CONF_dfs_replication=1
+    networks:
+      - bigdata-network
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    restart: unless-stopped
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - HDFS_CONF_dfs_permissions_enabled=false
+      - HDFS_CONF_dfs_replication=1
+    networks:
+      - bigdata-network
+    depends_on:
+      - namenode
+
+  spark-master:
+    image: bde2020/spark-master:3.1.1-hadoop3.2
+    container_name: spark-master2
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - .:/app                                    # Full project root → /app inside container
+    environment:
+      - INIT_DAEMON_STEP=setup_spark
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - SPARK_DRIVER_MEMORY=2G
+    networks:
+      - bigdata-network
+    depends_on:
+      - namenode
+      - datanode
+
+  spark-worker:
+    image: bde2020/spark-worker:3.1.1-hadoop3.2
+    container_name: spark-worker
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    volumes:
+      - .:/app
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - SPARK_WORKER_CORES=4
+      - SPARK_WORKER_MEMORY=8G
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+    networks:
+      - bigdata-network
+    depends_on:
+      - spark-master
+
+
+networks:
+  bigdata-network:
+    driver: bridge
+
+volumes:
+  hadoop_namenode:
+  hadoop_datanode:
