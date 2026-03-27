@@ -41,7 +41,7 @@ import sys
 # ── Defaults ─────────────────────────────────────────────────────────────────
 DEFAULT_SOURCE   = "./downloaded_data"            # root of the unzipped dataset
 DEFAULT_OUTPUT   = "./dataset_ready_for_hdfs"     # flat output folder (mounted into namenode)
-TARGET_GB        = 1.5                            # desired output size in GB
+TARGET_GB        = 1.1                           # desired output size in GB
 BYTES_PER_GB     = 1024 ** 3
 
 

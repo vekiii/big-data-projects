@@ -45,6 +45,7 @@ services:
     ports:
       - "8080:8080"
       - "7077:7077"
+      - "4040:4040"
     volumes:
       - .:/app                                    # Full project root → /app inside container
     environment:

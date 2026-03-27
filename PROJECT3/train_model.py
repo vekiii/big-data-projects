@@ -196,9 +196,9 @@ def train_rf_classifier(train_df, val_df, models_path: str) -> dict:
     pipeline = Pipeline(stages=prep + [rf])
 
     grid = (ParamGridBuilder()
-            .addGrid(rf.numTrees,             [50, 100])
-            .addGrid(rf.maxDepth,             [5, 10])
-            .addGrid(rf.minInstancesPerNode,  [1, 5])
+            .addGrid(rf.numTrees,             [20])
+            .addGrid(rf.maxDepth,             [5])
+            .addGrid(rf.minInstancesPerNode,  [1])
             .build())
 
     cv = CrossValidator(
@@ -227,9 +227,9 @@ def train_gbt_classifier(train_df, val_df, models_path: str) -> dict:
     pipeline = Pipeline(stages=prep + [gbt])
 
     grid = (ParamGridBuilder()
-            .addGrid(gbt.maxIter,  [20, 50])
-            .addGrid(gbt.maxDepth, [4, 6])
-            .addGrid(gbt.stepSize, [0.1, 0.05])
+            .addGrid(gbt.maxIter,  [10])
+            .addGrid(gbt.maxDepth, [3])
+            .addGrid(gbt.stepSize, [0.1])
             .build())
 
     cv = CrossValidator(
@@ -264,8 +264,8 @@ def train_rf_regressor(train_df, val_df, models_path: str) -> dict:
     pipeline = Pipeline(stages=prep + [rf])
 
     grid = (ParamGridBuilder()
-            .addGrid(rf.numTrees, [50, 100])
-            .addGrid(rf.maxDepth, [5, 10])
+            .addGrid(rf.numTrees, [20])
+            .addGrid(rf.maxDepth, [5])
             .build())
 
     cv = CrossValidator(
@@ -294,9 +294,9 @@ def train_gbt_regressor(train_df, val_df, models_path: str) -> dict:
     pipeline = Pipeline(stages=prep + [gbt])
 
     grid = (ParamGridBuilder()
-            .addGrid(gbt.maxIter,  [20, 50])
-            .addGrid(gbt.maxDepth, [4, 6])
-            .addGrid(gbt.stepSize, [0.1, 0.05])
+            .addGrid(gbt.maxIter,  [10])
+            .addGrid(gbt.maxDepth, [5])
+            .addGrid(gbt.stepSize, [0.1])
             .build())
 
     cv = CrossValidator(
