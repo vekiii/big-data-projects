@@ -22,6 +22,7 @@ Run locally (for quick testing):
 import argparse
 import json
 import time
+import re
 
 from pyspark.ml import Pipeline
 from pyspark.ml.classification import GBTClassifier, RandomForestClassifier
@@ -48,13 +49,11 @@ FEATURE_COLS = [
     "HR", "Pulse", "Perf",
     "etCO2", "awRR",
     "NBP_Sys", "NBP_Dia", "NBP_Mean",
-    "ART_Sys", "ART_Dias", "ART_Mean",
     "Temp", "BIS", "RR",
     "Tidal_Volume", "Minute_Volume",
     "etO2", "inO2",
     "MAC", "etSEV", "inSEV",
     "Num_Patient_Alarms",
-    "pulse_pressure_art",
     "pulse_pressure_nbp",
 ]
 
@@ -108,7 +107,7 @@ def load_and_clean(spark: SparkSession, hdfs_path: str):
         "NBP (Pulse)":  "NBP_Pulse",
         "NBP (Time Remaining)": "NBP_Time_Remaining",
         "ART (Sys)":    "ART_Sys",
-        "ART (Dias)":   "ART_Dias",
+        "ART (Dia)":   "ART_Dias",
         "ART (Mean)":   "ART_Mean",
         "ST-II":        "ST_II",
         "Set I:E ratio":"Set_IE_ratio",
@@ -154,15 +153,16 @@ def load_and_clean(spark: SparkSession, hdfs_path: str):
 
     # ── Engineered features ───────────────────────────────────────────────────
     df = df.withColumn(
-        "pulse_pressure_art",
-        F.when(F.col("ART_Sys").isNotNull() & F.col("ART_Dias").isNotNull(),
-               F.col("ART_Sys") - F.col("ART_Dias"))
-    )
-    df = df.withColumn(
         "pulse_pressure_nbp",
         F.when(F.col("NBP_Sys").isNotNull() & F.col("NBP_Dia").isNotNull(),
                F.col("NBP_Sys") - F.col("NBP_Dia"))
     )
+    for col in df.columns:
+        safe = re.sub(r'[ ,;{}()\n\t=:\-]', '_', col).strip('_')
+        if safe != col:
+            df = df.withColumnRenamed(col, safe)
+
+
 
     # ── Labels ────────────────────────────────────────────────────────────────
     df = df.withColumn(
