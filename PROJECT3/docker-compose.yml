@@ -39,7 +39,8 @@ services:
       - namenode
 
   spark-master:
-    image: .
+    build: .
+    image: my-project-spark:latest
     container_name: spark-master2
     restart: unless-stopped
     ports:
@@ -58,7 +59,7 @@ services:
       - datanode
 
   spark-worker:
-    image: .
+    image: my-project-spark:latest
     container_name: spark-worker
     restart: unless-stopped
     ports:
