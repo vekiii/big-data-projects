@@ -8,7 +8,7 @@ test split across multiple parameter configurations:
   • Temporal segments  : early / mid / late stage of the procedure
   • Alarm state        : active alarms vs no alarms
 
-Results are written to HDFS as CSV + JSON.
+Results are written to HDFS as JSON metrics.
 
 Run inside the cluster:
     docker exec -it spark-master /spark/bin/spark-submit \
@@ -29,7 +29,6 @@ from pyspark.ml.evaluation import (
 )
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
-from pyspark.sql.window import Window
 
 HDFS_NAMENODE = "hdfs://namenode:8020"
 HDFS_MODELS   = f"{HDFS_NAMENODE}/user/root/models"
@@ -57,14 +56,14 @@ def build_spark(local: bool) -> SparkSession:
 
 
 def add_time_norm(df):
-    """Normalise RelativeTimeMilliseconds to [0, 1] per case_name."""
-    win = Window.partitionBy("case_name")
-    return df.withColumn(
-        "time_norm",
-        (F.col("RelativeTimeMilliseconds") - F.min("RelativeTimeMilliseconds").over(win)) /
-        (F.max("RelativeTimeMilliseconds").over(win) -
-         F.min("RelativeTimeMilliseconds").over(win) + 1e-6)
-    )
+    """Normalise RelativeTimeMilliseconds to [0, 1] using global min/max.
+    Avoids per-partition window functions that cause OOM on small executors.
+    """
+    ts = "RelativeTimeMilliseconds"
+    mn = df.agg(F.min(ts)).collect()[0][0]
+    mx = df.agg(F.max(ts)).collect()[0][0]
+    rng = float(mx - mn) if mx != mn else 1.0
+    return df.withColumn("time_norm", (F.col(ts) - mn) / rng)
 
 
 # ── Evaluation helpers ────────────────────────────────────────────────────────
@@ -110,7 +109,7 @@ def run_classification(test_df, rf, gbt, results_path: str, spark):
     configs["alarms_active"] = df.filter(F.col("Num_Patient_Alarms") > 0)
     configs["no_alarms"]     = df.filter(F.col("Num_Patient_Alarms") == 0)
 
-    all_metrics, out_dfs = [], []
+    all_metrics = []
 
     for seg_name, seg_df in configs.items():
         seg_df = seg_df.cache()
@@ -119,24 +118,13 @@ def run_classification(test_df, rf, gbt, results_path: str, spark):
             m = eval_cls(preds, seg_name, model_name)
             if m:
                 all_metrics.append(m)
-                print(f"  [{model_name}][{seg_name}]  AUC={m['auc']}  F1={m['f1']}  n={m['n_rows']:,}")
-            out_dfs.append(
-                preds.select("case_name", "RelativeTimeMilliseconds",
-                             CLASS_LABEL, "prediction", "probability")
-                     .withColumn("model",   F.lit(model_name))
-                     .withColumn("segment", F.lit(seg_name))
-            )
+                print(f"  [{model_name}][{seg_name}]  AUC={m['auc']}  "
+                      f"F1={m['f1']}  Acc={m['accuracy']}  n={m['n_rows']:,}")
         seg_df.unpersist()
-
-    from functools import reduce
-    combined = reduce(lambda a, b: a.union(b), out_dfs)
-    (combined.sample(fraction=0.1, seed=42).coalesce(4)
-     .write.mode("overwrite").option("header", "true")
-     .csv(f"{results_path}/cls_predictions"))
 
     spark.sparkContext.parallelize([json.dumps(all_metrics, indent=2)]) \
          .coalesce(1).saveAsTextFile(f"{results_path}/cls_metrics")
-    print(f"[predict] Saved → {results_path}/cls_*")
+    print(f"[predict] Metrics saved → {results_path}/cls_metrics")
     return all_metrics
 
 
@@ -152,7 +140,7 @@ def run_regression(test_df, rf, gbt, results_path: str, spark):
     configs["alarms_active"] = df.filter(F.col("Num_Patient_Alarms") > 0)
     configs["no_alarms"]     = df.filter(F.col("Num_Patient_Alarms") == 0)
 
-    all_metrics, out_dfs = [], []
+    all_metrics = []
 
     for seg_name, seg_df in configs.items():
         seg_df = seg_df.cache()
@@ -161,25 +149,13 @@ def run_regression(test_df, rf, gbt, results_path: str, spark):
             m = eval_reg(preds, seg_name, model_name)
             if m:
                 all_metrics.append(m)
-                print(f"  [{model_name}][{seg_name}]  RMSE={m['rmse']}  MAE={m['mae']}  "
-                      f"R²={m['r2']}  n={m['n_rows']:,}")
-            out_dfs.append(
-                preds.select("case_name", "RelativeTimeMilliseconds",
-                             REG_LABEL, "prediction")
-                     .withColumn("model",   F.lit(model_name))
-                     .withColumn("segment", F.lit(seg_name))
-            )
+                print(f"  [{model_name}][{seg_name}]  RMSE={m['rmse']}  "
+                      f"MAE={m['mae']}  R²={m['r2']}  n={m['n_rows']:,}")
         seg_df.unpersist()
-
-    from functools import reduce
-    combined = reduce(lambda a, b: a.union(b), out_dfs)
-    (combined.sample(fraction=0.1, seed=42).coalesce(4)
-     .write.mode("overwrite").option("header", "true")
-     .csv(f"{results_path}/reg_predictions"))
 
     spark.sparkContext.parallelize([json.dumps(all_metrics, indent=2)]) \
          .coalesce(1).saveAsTextFile(f"{results_path}/reg_metrics")
-    print(f"[predict] Saved → {results_path}/reg_*")
+    print(f"[predict] Metrics saved → {results_path}/reg_metrics")
     return all_metrics
 
 
@@ -205,9 +181,17 @@ def main():
     gbt_reg = PipelineModel.load(f"{args.models}/gbt_regressor")
 
     t0 = time.time()
-    run_classification(test_df, rf_cls,  gbt_cls, args.results, spark)
-    run_regression(    test_df, rf_reg,  gbt_reg, args.results, spark)
+    cls_metrics = run_classification(test_df, rf_cls, gbt_cls, args.results, spark)
+    reg_metrics = run_regression(test_df, rf_reg, gbt_reg, args.results, spark)
+
     print(f"\n[predict] Total inference time: {time.time() - t0:.1f}s")
+    print("\n[predict] ── Final Summary ───────────────────────────────────")
+    print("Classification:")
+    for m in cls_metrics:
+        print(f"  {m['model']:20s} [{m['segment']:20s}]  AUC={m['auc']}  F1={m['f1']}")
+    print("Regression:")
+    for m in reg_metrics:
+        print(f"  {m['model']:20s} [{m['segment']:20s}]  RMSE={m['rmse']}  R²={m['r2']}")
 
     test_df.unpersist()
     spark.stop()
