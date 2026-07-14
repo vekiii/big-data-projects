@@ -187,34 +187,56 @@ def consume_and_visualize(broker: str, pollutant: str, output_path: str, refresh
 
     try:
         while True:
-            batch_count = 0
-            for msg in consumer:
-                record = msg.value
-                lat = record.get("lat")
-                lon = record.get("lon")
+            try:
+                batch_count = 0
+                for msg in consumer:
+                    record = msg.value
+                    lat = record.get("lat")
+                    lon = record.get("lon")
 
-                if lat is None or lon is None:
-                    continue
+                    if lat is None or lon is None:
+                        continue
 
-                grid_data[(lat, lon)] = record
-                batch_count += 1
+                    grid_data[(lat, lon)] = record
+                    batch_count += 1
 
-                if not window_info:
-                    window_info = {
-                        "type": record.get("window_type", "unknown"),
-                        "duration": record.get("window_duration", "unknown"),
-                    }
+                    if not window_info:
+                        window_info = {
+                            "type": record.get("window_type", "unknown"),
+                            "duration": record.get("window_duration", "unknown"),
+                        }
 
-            if grid_data and (time.time() - last_render_time > RENDER_INTERVAL or batch_count > 0):
-                render_map(grid_data, pollutant, output_path, refresh_seconds, window_info)
-                last_render_time = time.time()
-                if not browser_opened:
-                    abs_path = os.path.abspath(output_path)
-                    webbrowser.open(f"file://{abs_path}")
-                    browser_opened = True
-            elif not grid_data:
-                print("[Flink Map Consumer] Waiting for data from flink-results topic...")
-                time.sleep(2)
+                if grid_data and (time.time() - last_render_time > RENDER_INTERVAL or batch_count > 0):
+                    render_map(grid_data, pollutant, output_path, refresh_seconds, window_info)
+                    last_render_time = time.time()
+                    if not browser_opened:
+                        abs_path = os.path.abspath(output_path)
+                        webbrowser.open(f"file://{abs_path}")
+                        browser_opened = True
+                elif not grid_data:
+                    print("[Flink Map Consumer] Waiting for data from flink-results topic...")
+                    time.sleep(2)
+
+            except ValueError as e:
+                if "Invalid file descriptor" in str(e):
+                    print("[Flink Map Consumer] Socket error detected, reconnecting...")
+                    try:
+                        consumer.close()
+                    except Exception:
+                        pass
+                    time.sleep(2)
+                    consumer = KafkaConsumer(
+                        "flink-results",
+                        bootstrap_servers=broker,
+                        auto_offset_reset="earliest",
+                        enable_auto_commit=True,
+                        group_id="flink-map-consumer",
+                        value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+                        consumer_timeout_ms=5000,
+                    )
+                    print("[Flink Map Consumer] Reconnected to Kafka broker")
+                else:
+                    raise
 
     except KeyboardInterrupt:
         print("\n[Flink Map Consumer] Stopped by user.")
