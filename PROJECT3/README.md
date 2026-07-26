@@ -93,10 +93,12 @@ Monitor progress at http://localhost:9870 → **DFS Used**.
 
 ### Step 4 – Train models
 
-```bash
 Since bde images are missing numpy, which is required for MLlib, you have to install it on Spark services. Run:
 
-docker exec spark-master2 apk add --no-cache py3-numpydocker exec spark-worker apk add --no-cache py3-numpy<img width="1318" height="138" alt="image" src="https://github.com/user-attachments/assets/f54b0f5a-fc09-442b-8b4f-87d50d795645" />
+```bash
+
+docker exec spark-master2 apk add --no-cache py3-numpy
+docker exec spark-worker apk add --no-cache py3-numpy
 
 ```
 
