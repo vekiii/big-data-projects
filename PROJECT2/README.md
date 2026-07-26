@@ -75,8 +75,13 @@ docker compose up -d
 
 ## Setup
 
-### 1. Install local Python dependencies
+### 1. Install Python into clusters 
 
+```powershell
+docker exec -u root flink-jobmanager bash -c "apt-get update && apt-get install -y python3 python3-pip"
+docker exec -u root flink-taskmanager bash -c "apt-get update && apt-get install -y python3 python3-pip"
+```
+**Install local Python dependencies**
 ```powershell
 pip install kafka-python-ng pyproj folium
 ```
@@ -84,10 +89,10 @@ pip install kafka-python-ng pyproj folium
 ### 2. Install PyFlink inside Flink containers
 
 ```powershell
-docker exec flink-jobmanager pip3 install apache-flink --break-system-packages
-docker exec flink-taskmanager pip3 install apache-flink --break-system-packages
-docker exec flink-jobmanager ln -s /usr/bin/python3 /usr/bin/python
-docker exec flink-taskmanager ln -s /usr/bin/python3 /usr/bin/python
+docker exec -u root flink-jobmanager pip3 install apache-flink --break-system-packages
+docker exec -u root flink-taskmanager pip3 install apache-flink --break-system-packages
+docker exec -u root flink-jobmanager ln -sf /usr/bin/python3 /usr/bin/python
+docker exec -u root flink-taskmanager ln -sf /usr/bin/python3 /usr/bin/python
 ```
 
 ### 3. Download Kafka connector JAR for Flink (on both containers)
